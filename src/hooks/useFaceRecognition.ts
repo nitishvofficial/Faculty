@@ -94,7 +94,7 @@ export function useFaceRecognition() {
       }
 
       // Wait before next frame
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }, []);
 

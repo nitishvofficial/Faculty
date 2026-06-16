@@ -55,8 +55,12 @@ export default function ResultScreen({ navigation, route }: Props) {
   const handleExportCSV = async () => {
     setSaving(true);
     try {
-      const dateStr = new Date().toLocaleDateString();
-      const timeStr = new Date().toLocaleTimeString();
+      // Format date as YYYY-MM-DD
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const formattedDate = `${yyyy}-${mm}-${dd}`;
 
       // Fetch full class list from Supabase
       const { data: allStudents, error } = await supabase
@@ -70,21 +74,34 @@ export default function ResultScreen({ navigation, route }: Props) {
         console.warn('Failed to fetch class list from database:', error.message);
       }
 
-      let csvString = 'Faculty ID,Faculty Name,Student ID,Student Name,Roll Number,Status,Subject,Branch,Semester,Section,Date,Time\n';
+      let csvString = `Faculty_Name,${name}\n`;
+      csvString += `Faculty_ID,${uid}\n`;
+      csvString += `Subject,${classInfo.subject}\n`;
+      csvString += `Branch,${classInfo.branch}\n`;
+      csvString += `Semester,${classInfo.semester}\n`;
+      csvString += `Section,${classInfo.section}\n`;
+      csvString += `Date,${formattedDate}\n\n`;
+      
+      csvString += `S.No,Roll_No,Student_Name\n\n`;
+
+      let serialNumber = 1;
 
       if (allStudents && allStudents.length > 0) {
         allStudents.forEach(s => {
           // Check if this student is in the connected/verified list
           const connectedStudent = students.find(cs => cs.uid === s.student_uid);
-          const statusStr = (connectedStudent && connectedStudent.status === 'confirmed') ? 'Present' : 'Absent';
-          
-          csvString += `${uid},${name},${s.student_uid},${s.name},${s.roll_number},${statusStr},${classInfo.subject},${classInfo.branch},${classInfo.semester},${classInfo.section},${dateStr},${timeStr}\n`;
+          if (connectedStudent && connectedStudent.status === 'confirmed') {
+            csvString += `${serialNumber},${s.roll_number},${s.name}\n`;
+            serialNumber++;
+          }
         });
       } else {
         // Fallback to just the connected students if no roster found
         students.forEach(s => {
-          const statusStr = s.status === 'confirmed' ? 'Present' : 'Absent';
-          csvString += `${uid},${name},${s.uid},Unknown,Unknown,${statusStr},${classInfo.subject},${classInfo.branch},${classInfo.semester},${classInfo.section},${dateStr},${timeStr}\n`;
+          if (s.status === 'confirmed') {
+            csvString += `${serialNumber},Unknown,Unknown\n`;
+            serialNumber++;
+          }
         });
       }
 

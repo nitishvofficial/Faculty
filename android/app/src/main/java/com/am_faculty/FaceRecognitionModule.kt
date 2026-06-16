@@ -86,7 +86,8 @@ class FaceRecognitionModule(private val reactContext: ReactApplicationContext) :
                 return
             }
 
-            var bitmap = BitmapFactory.decodeFile(path)
+            val options = BitmapFactory.Options().apply { inSampleSize = 2 }
+            var bitmap = BitmapFactory.decodeFile(path, options)
             if (bitmap == null) {
                 promise.reject("DECODE_ERROR", "Processing failed")
                 return
