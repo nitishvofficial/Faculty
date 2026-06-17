@@ -119,6 +119,241 @@ All biometric data processed by the Academic Monitor application remains on the 
 
 ---
 
+## 🤖 ERP Attendance Bot
+
+### Purpose
+
+The ERP Attendance Bot is the final automation layer of the Academic Monitor ecosystem.
+
+Its responsibility is **not to verify attendance**. Attendance verification has already been completed through multiple security layers within the Student and Faculty applications:
+
+* Face Recognition Authentication
+* Bluetooth Proximity Verification
+* OTP Validation
+* Faculty-Controlled Attendance Session
+
+The bot's sole responsibility is to transfer verified attendance records into the institution's official ERP system automatically.
+
+---
+
+### Workflow After Faculty Session Ends
+
+#### Step 1 — Session Completion
+
+Once the faculty member ends an attendance session:
+
+* All verified attendance records are finalized.
+* Attendance data is stored securely in Supabase.
+* A session summary is generated containing:
+
+  * Faculty information
+  * Subject details
+  * Branch and section
+  * Attendance timestamps
+  * Present student list
+
+---
+
+#### Step 2 — Attendance Export
+
+The Faculty Application automatically generates structured attendance data.
+
+Example:
+
+| Roll Number | Student Name | Status  | Time     |
+| ----------- | ------------ | ------- | -------- |
+| 221FA001    | Student A    | Present | 10:08 AM |
+| 221FA002    | Student B    | Present | 10:11 AM |
+
+The records are then uploaded to the central database and made available to the Admin Dashboard and ERP Bot.
+
+---
+
+#### Step 3 — Admin Monitoring
+
+Administrators can monitor:
+
+* Attendance sessions
+* Exported records
+* Upload history
+* Synchronization status
+* Processing logs
+
+This provides complete traceability before ERP submission.
+
+---
+
+#### Step 4 — Scheduled ERP Processing
+
+At the configured processing window (for example, 6 PM – 7 PM daily), the ERP Bot starts automatically.
+
+The bot:
+
+1. Retrieves pending attendance records.
+2. Validates attendance counts.
+3. Checks holiday schedules.
+4. Verifies session integrity.
+5. Identifies records that have not yet been uploaded to ERP.
+
+Only verified attendance records are processed.
+
+---
+
+#### Step 5 — ERP Login
+
+Using secure credentials stored in the system, the bot:
+
+* Opens the institution ERP portal.
+* Authenticates successfully.
+* Navigates to the faculty attendance module.
+
+---
+
+#### Step 6 — Attendance Mapping
+
+The bot loads:
+
+* Faculty information
+* Subject details
+* Class roster
+* Student roll numbers
+
+It then matches verified attendance records with the ERP class roster.
+
+Example:
+
+Verified Attendance:
+
+* 221FA001
+* 221FA002
+* 221FA005
+
+ERP Roster:
+
+* 221FA001
+* 221FA002
+* 221FA003
+* 221FA004
+* 221FA005
+
+Matched students are marked present.
+
+---
+
+#### Step 7 — Validation Layer
+
+Before submission, the system performs validation checks:
+
+* Duplicate detection
+* Missing records verification
+* Session consistency checks
+* Faculty and subject matching
+* Attendance count verification
+
+If any inconsistency is detected:
+
+* ERP submission is halted.
+* Error logs are generated.
+* Manual review is required.
+
+---
+
+#### Step 8 — ERP Submission
+
+After successful validation:
+
+* Attendance is entered into the ERP system.
+* Records are submitted automatically.
+* Submission confirmation is captured.
+
+---
+
+#### Step 9 — Audit Logging
+
+Every ERP operation is logged, including:
+
+* Login status
+* Submission status
+* Processing duration
+* Attendance counts
+* Success or failure reports
+
+These logs are visible through the Admin Dashboard.
+
+---
+
+#### Step 10 — Report Generation
+
+After processing completes, the bot generates:
+
+* Daily attendance reports
+* ERP synchronization reports
+* Failed submission reports
+* Audit logs
+
+Reports are stored for future reference and compliance.
+
+---
+
+### Safety-First Design
+
+The ERP Bot follows a strict principle:
+
+> Wrong attendance is worse than missing attendance.
+
+Whenever uncertainty exists, the system:
+
+* Stops automatic submission
+* Generates detailed logs
+* Requests administrator review
+
+This prevents incorrect attendance from being uploaded to the official ERP system.
+
+---
+
+### Technology Stack
+
+**ERP Bot**
+
+* TypeScript
+* Playwright
+* Supabase
+* Scheduled Tasks
+* Logging System
+* Automated Report Generation
+
+---
+
+### End-to-End Flow
+
+Student Verification
+↓
+Face Recognition
+↓
+Bluetooth Proximity Check
+↓
+OTP Verification
+↓
+Faculty Attendance Session
+↓
+Attendance Stored in Supabase
+↓
+CSV / Attendance Record Generation
+↓
+Admin Dashboard Monitoring
+↓
+ERP Attendance Bot
+↓
+Validation Checks
+↓
+ERP Submission
+↓
+Reports & Audit Logs
+↓
+Official Attendance Updated
+
+---
+
 ## 🤝 Contributing
 Since this application interacts heavily with custom Native Modules for TFLite and BLE, contributors should be comfortable working with Kotlin (`android/app/src/main/java/...`) alongside React Native (`src/`).
 
