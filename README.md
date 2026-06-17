@@ -37,13 +37,13 @@ By combining edge-based Artificial Intelligence (TensorFlow Lite) for facial ver
 
 ```mermaid
 graph TD
-    A[Supabase Cloud DB] -->|Sync on App Load| B(MMKV Local Cache)
-    B --> C{Faculty Tries to Login}
-    C -->|Camera Frame| D[TFLite Native Module]
-    D -->|Detect & Embed| E[Generate 128-D Vector]
-    E --> F{Cosine Similarity >= 60%}
-    F -->|Fail| G[Access Denied]
-    F -->|Success| H[Timetable & Subject Selection]
+    A[Supabase Cloud DB] -->|"Sync on App Load"| B(MMKV Local Cache)
+    B --> C{"Faculty Tries to Login"}
+    C -->|"Camera Frame"| D[TFLite Native Module]
+    D -->|"Detect & Embed"| E[Generate 128-D Vector]
+    E --> F{"Cosine Similarity >= 60%"}
+    F -->|"Fail"| G[Access Denied]
+    F -->|"Success"| H[Timetable & Subject Selection]
     H --> I[Start BLE Broadcast]
     I --> J[Students Connect via Bluetooth]
     J --> K[Generate OTP & Finalize Session]
@@ -326,31 +326,21 @@ This prevents incorrect attendance from being uploaded to the official ERP syste
 
 ### End-to-End Flow
 
-Student Verification
-↓
-Face Recognition
-↓
-Bluetooth Proximity Check
-↓
-OTP Verification
-↓
-Faculty Attendance Session
-↓
-Attendance Stored in Supabase
-↓
-CSV / Attendance Record Generation
-↓
-Admin Dashboard Monitoring
-↓
-ERP Attendance Bot
-↓
-Validation Checks
-↓
-ERP Submission
-↓
-Reports & Audit Logs
-↓
-Official Attendance Updated
+```mermaid
+graph TD
+    A[Student Verification] --> B[Face Recognition]
+    B --> C[Bluetooth Proximity Check]
+    C --> D[OTP Verification]
+    D --> E[Faculty Attendance Session]
+    E --> F[Attendance Stored in Supabase]
+    F --> G[CSV / Attendance Record Generation]
+    G --> H[Admin Dashboard Monitoring]
+    H --> I[ERP Attendance Bot]
+    I --> J[Validation Checks]
+    J --> K[ERP Submission]
+    K --> L[Reports & Audit Logs]
+    L --> M[Official Attendance Updated]
+```
 
 ---
 
