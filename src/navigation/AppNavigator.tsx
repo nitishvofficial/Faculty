@@ -7,6 +7,7 @@ import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createStackNavigator} from '@react-navigation/stack';
 
+import SplashScreen from '../screens/SplashScreen';
 import FaceScanScreen from '../screens/FaceScanScreen';
 import TimetableScreen from '../screens/TimetableScreen';
 import BLESessionScreen from '../screens/BLESessionScreen';
@@ -25,6 +26,7 @@ export type ClassInfo = {
 };
 
 export type RootStackParamList = {
+  Splash: undefined;
   FaceScan: undefined;
   Timetable: {uid: string; name: string};
   BLESession: {uid: string; name: string; classInfo: ClassInfo};
@@ -48,7 +50,8 @@ export default function AppNavigator() {
           cardStyle: {backgroundColor: '#0f172a'},
           animationEnabled: true,
         }}
-        initialRouteName="FaceScan">
+        initialRouteName="Splash">
+        <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="FaceScan" component={FaceScanScreen} />
         <Stack.Screen name="Timetable" component={TimetableScreen} />
         <Stack.Screen name="BLESession" component={BLESessionScreen} />

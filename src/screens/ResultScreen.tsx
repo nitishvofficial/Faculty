@@ -25,9 +25,10 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { timetableService } from '../services/timetableService';
-import { ConnectedStudent } from '../ble/FacultyBLEModule';
+import FacultyBLEModule, { ConnectedStudent } from '../ble/FacultyBLEModule';
 import { COLORS } from '../constants/theme';
 import { supabase } from '../services/supabaseClient';
+import { Buffer } from 'buffer';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Result'>;
@@ -40,16 +41,21 @@ export default function ResultScreen({ navigation, route }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Bug 5 fix: Stop session + advertising when this screen mounts.
+  // This covers the case where faculty navigates here from OTPScreen (handleFinish)
+  // which does NOT call stopSession/stopAdvertising before navigating.
+  useEffect(() => {
+    FacultyBLEModule.stopSession();
+    FacultyBLEModule.stopAdvertising().catch(() => {});
+  }, []);
+
   const presentCount = students.filter(s => s.status === 'confirmed').length;
 
-  const handleManualMark = (studentUid: string) => {
-    const updated = students.map(s => {
-      if (s.uid === studentUid) {
-        return { ...s, status: s.status === 'confirmed' ? 'rejected' : 'confirmed' } as ConnectedStudent;
-      }
-      return s;
-    });
-    setStudents(updated);
+  const handleManualMark = async (studentUid: string) => {
+    const updatedStudent = await FacultyBLEModule.manualToggleAttendance(studentUid);
+    if (updatedStudent) {
+      setStudents(FacultyBLEModule.getConnectedStudents());
+    }
   };
 
   const handleExportCSV = async () => {
@@ -106,13 +112,34 @@ export default function ResultScreen({ navigation, route }: Props) {
       }
 
       const fileName = `Attendance_${classInfo.subject.replace(/\s+/g, '_')}_${Date.now()}.csv`;
-      const filePath = Platform.OS === 'android'
-        ? `${RNFS.DownloadDirectoryPath}/${fileName}`
-        : `${RNFS.DocumentDirectoryPath}/${fileName}`;
+      const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
 
       await RNFS.writeFile(filePath, csvString, 'utf8');
+
+      // Upload to Supabase Storage if bucket exists
+      let uploadedToCloud = false;
+      try {
+        const base64Data = await RNFS.readFile(filePath, 'base64');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const { error: uploadError } = await supabase.storage
+          .from('attendance')
+          .upload(fileName, buffer, { contentType: 'text/csv', upsert: true });
+
+        if (!uploadError) {
+          uploadedToCloud = true;
+        } else {
+          console.warn('Supabase Storage upload:', uploadError.message);
+        }
+      } catch (uploadErr: any) {
+        console.warn('Supabase upload exception:', uploadErr);
+      }
+
       setSaved(true);
-      Alert.alert('Success', `Attendance CSV saved to:\n${filePath}`);
+      if (uploadedToCloud) {
+        Alert.alert('Success', `Attendance CSV saved locally and uploaded to cloud.`);
+      } else {
+        Alert.alert('Saved Locally', `Attendance CSV successfully saved to:\n${filePath}`);
+      }
     } catch (err: any) {
       Alert.alert('Export Failed', err.message || 'Check storage permissions and try again.');
     } finally {

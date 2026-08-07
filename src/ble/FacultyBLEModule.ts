@@ -142,6 +142,21 @@ class FacultyBLEModuleClass {
       'onClientDisconnected',
       (event: {address: string}) => {
         console.log(TAG, 'Client disconnected:', event.address);
+        // Clean up student by deviceAddress to allow rejoin (preserve confirmed students)
+        for (const [uid, student] of this.connectedStudents) {
+          const studentAddr = student.deviceAddress?.toLowerCase();
+          const eventAddr = event.address?.toLowerCase();
+          if (studentAddr && eventAddr && studentAddr === eventAddr) {
+            if (student.status !== 'confirmed') {
+              this.connectedStudents.delete(uid);
+              this.callbacks.onStudentRemoved?.(uid);
+              console.log(TAG, 'Removed non-confirmed student on disconnect:', uid);
+            } else {
+              console.log(TAG, 'Preserved confirmed student on disconnect:', uid);
+            }
+            break;
+          }
+        }
       },
     );
 
@@ -169,6 +184,79 @@ class FacultyBLEModuleClass {
     );
 
     this.eventSubs = [msgSub, disconnectSub, advFailureSub];
+  };
+
+  /**
+   * Update session callbacks without clearing student state.
+   * Use this when transitioning between screens mid-session
+   * (e.g., BLESession → OTP) where students are already connected.
+   *
+   * Unlike startSession(), this does NOT call connectedStudents.clear(),
+   * preserving the deviceAddress→student mapping needed for OTP verification.
+   */
+  updateCallbacks = (callbacks: SessionCallbacks): void => {
+    this.callbacks = callbacks;
+
+    if (!this.emitter) {
+      console.error(TAG, 'Emitter not initialized — call initialize() first');
+      return;
+    }
+
+    // Clear old event subscriptions and re-register with new callbacks
+    this.eventSubs.forEach(sub => sub.remove());
+
+    const msgSub = this.emitter.addListener(
+      'onStudentMessage',
+      (event: {message: string; address: string}) => {
+        this._handleStudentMessage(event.message, event.address);
+      },
+    );
+
+    const disconnectSub = this.emitter.addListener(
+      'onClientDisconnected',
+      (event: {address: string}) => {
+        console.log(TAG, 'Client disconnected:', event.address);
+        for (const [uid, student] of this.connectedStudents) {
+          const studentAddr = student.deviceAddress?.toLowerCase();
+          const eventAddr = event.address?.toLowerCase();
+          if (studentAddr && eventAddr && studentAddr === eventAddr) {
+            if (student.status !== 'confirmed') {
+              this.connectedStudents.delete(uid);
+              this.callbacks.onStudentRemoved?.(uid);
+              console.log(TAG, 'Removed non-confirmed student on disconnect:', uid);
+            } else {
+              console.log(TAG, 'Preserved confirmed student on disconnect:', uid);
+            }
+            break;
+          }
+        }
+      },
+    );
+
+    const advFailureSub = this.emitter.addListener(
+      'onAdvertisingFailure',
+      (event: {errorCode: number}) => {
+        console.error(TAG, 'Asynchronous BLE advertising failure:', event.errorCode);
+        let errorMsg = 'BLE Advertising failed';
+        if (event.errorCode === 1) {
+          errorMsg = 'BLE Advertising failed: Payload data too large';
+        } else if (event.errorCode === 2) {
+          errorMsg = 'BLE Advertising failed: Too many advertisers';
+        } else if (event.errorCode === 3) {
+          errorMsg = 'BLE Advertising failed: Already started';
+        } else if (event.errorCode === 4) {
+          errorMsg = 'BLE Advertising failed: Internal error';
+        } else if (event.errorCode === 5) {
+          errorMsg = 'BLE Advertising failed: Feature not supported';
+        } else {
+          errorMsg = `BLE Advertising failed with native error code ${event.errorCode}`;
+        }
+        this.callbacks.onError?.(new Error(errorMsg));
+      },
+    );
+
+    this.eventSubs = [msgSub, disconnectSub, advFailureSub];
+    console.log(TAG, 'Callbacks updated (students preserved:', this.connectedStudents.size, 'entries)');
   };
 
   stopSession = (): void => {
@@ -213,15 +301,25 @@ class FacultyBLEModuleClass {
    * Broadcast OTP_REQUEST to all connected students.
    */
   broadcastOTPRequest = async (): Promise<void> => {
+    // Reset all non-confirmed students back to pending so they all receive the notification.
+    // This is critical on OTP regeneration — without this, `otp_sent` students are skipped.
+    for (const [uid, student] of this.connectedStudents) {
+      if (student.status !== 'confirmed' && student.status !== 'rejected') {
+        student.status = 'pending';
+        this.connectedStudents.set(uid, student);
+      }
+    }
+
     await this._notifyAllStudents(MSG.OTP_REQUEST);
-    // Update all pending students to otp_sent
+
+    // Mark all pending students as otp_sent after notification
     for (const [uid, student] of this.connectedStudents) {
       if (student.status === 'pending') {
         student.status = 'otp_sent';
         this.connectedStudents.set(uid, student);
       }
     }
-    console.log(TAG, 'Broadcast OTP_REQUEST to all students');
+    console.log(TAG, 'Broadcast OTP_REQUEST to all non-confirmed students');
   };
 
   isOTPExpired = (): boolean => {
@@ -252,6 +350,37 @@ class FacultyBLEModuleClass {
     }
     this.callbacks.onStudentJoined?.(this.connectedStudents.get(uid)!);
     console.log(TAG, 'Manually marked present:', uid);
+  };
+
+  manualToggleAttendance = async (uid: string): Promise<ConnectedStudent | null> => {
+    const existing = this.connectedStudents.get(uid);
+    if (!existing) {
+      console.warn(TAG, 'Student not found for manual toggle:', uid);
+      return null;
+    }
+
+    const newStatus = existing.status === 'confirmed' ? 'rejected' : 'confirmed';
+    existing.status = newStatus;
+    this.connectedStudents.set(uid, existing);
+
+    this.callbacks.onStudentJoined?.(existing);
+    console.log(TAG, `Manually toggled ${uid} to ${newStatus}`);
+
+    if (existing.deviceAddress) {
+      try {
+        const message = newStatus === 'confirmed' ? MSG.ATTENDANCE_CONFIRMED : `${MSG.JOIN_REJECTED}${MSG.REJECT_MANUAL}`;
+        await BLEPeripheralModule.notifyDevice(
+          existing.deviceAddress,
+          FACULTY_TO_STUDENT_CHAR_UUID,
+          message,
+        );
+        console.log(TAG, `Sent ${newStatus} notification to student ${uid}`);
+      } catch (e: any) {
+        console.warn(TAG, 'Failed to notify student device:', e.message);
+      }
+    }
+
+    return existing;
   };
 
   removeStudent = (uid: string): void => {
@@ -298,14 +427,24 @@ class FacultyBLEModuleClass {
         return;
       }
 
-      // Reject duplicate
-      if (this.connectedStudents.has(uid)) {
-        BLEPeripheralModule.notifyDevice(
-          deviceAddress,
-          FACULTY_TO_STUDENT_CHAR_UUID,
-          `${MSG.JOIN_REJECTED}${MSG.REJECT_DUPLICATE}`,
-        ).catch(console.error);
-        return;
+      // Handle rejoin: same UID, different deviceAddress (app restart)
+      const existing = this.connectedStudents.get(uid);
+      if (existing) {
+        if (
+          existing.deviceAddress?.toLowerCase() === deviceAddress?.toLowerCase()
+        ) {
+          // True duplicate - same device trying to join twice
+          BLEPeripheralModule.notifyDevice(
+            deviceAddress,
+            FACULTY_TO_STUDENT_CHAR_UUID,
+            `${MSG.JOIN_REJECTED}${MSG.REJECT_DUPLICATE}`,
+          ).catch(console.error);
+          return;
+        } else {
+          // Same UID, new device - allow rejoin (app was closed/reopened)
+          console.log(TAG, `Rejoin detected for ${uid}, replacing old connection`);
+          this.connectedStudents.delete(uid);
+        }
       }
 
       const student: ConnectedStudent = {
@@ -331,9 +470,9 @@ class FacultyBLEModuleClass {
     if (message.startsWith(MSG.OTP_VERIFY_PREFIX)) {
       const submittedOTP = message.slice(MSG.OTP_VERIFY_PREFIX.length).trim();
 
-      // Find student by deviceAddress
+      // Find student by deviceAddress (case-insensitive)
       const student = Array.from(this.connectedStudents.values()).find(
-        s => s.deviceAddress === deviceAddress,
+        s => s.deviceAddress?.toLowerCase() === deviceAddress?.toLowerCase(),
       );
       if (!student) {
         console.warn(TAG, 'OTP from unknown device:', deviceAddress);
@@ -393,18 +532,30 @@ class FacultyBLEModuleClass {
 
   private _notifyAllStudents = async (message: string): Promise<void> => {
     const students = this.getConnectedStudents();
-    const promises = students
-      .filter(s => s.deviceAddress)
-      .map(s =>
-        BLEPeripheralModule.notifyDevice(
-          s.deviceAddress!,
-          FACULTY_TO_STUDENT_CHAR_UUID,
-          message,
-        ).catch((e: any) =>
-          console.warn(TAG, 'notifyDevice failed:', e.message),
-        ),
-      );
-    await Promise.all(promises);
+    const batchSize = 10;
+    
+    for (let i = 0; i < students.length; i += batchSize) {
+      const batch = students.slice(i, i + batchSize);
+      const promises = batch.map(async s => {
+        if (s.deviceAddress) {
+          try {
+            await BLEPeripheralModule.notifyDevice(
+              s.deviceAddress,
+              FACULTY_TO_STUDENT_CHAR_UUID,
+              message,
+            );
+          } catch (e: any) {
+            console.warn(TAG, 'notifyDevice failed for', s.uid, ':', e.message);
+          }
+        }
+      });
+      
+      // Execute the batch concurrently
+      await Promise.all(promises);
+      
+      // Small delay between batches to prevent Android BLE TX buffer overflow
+      await new Promise(resolve => setTimeout(resolve, 35));
+    }
   };
 }
 

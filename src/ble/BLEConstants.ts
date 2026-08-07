@@ -31,6 +31,7 @@ export const MSG = {
   REJECT_CLOSED: 'SESSION_CLOSED',
   REJECT_NOT_ENROLLED: 'NOT_ENROLLED',
   REJECT_MAX_ATTEMPTS: 'MAX_ATTEMPTS',
+  REJECT_MANUAL: 'MANUAL',
 };
 
 // ─── Session Advertisement ──────────────────────────────────────────────────

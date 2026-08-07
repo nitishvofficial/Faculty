@@ -54,7 +54,6 @@ export function useFaceRecognition() {
         const photo = await camera.takePhoto({
           flash: 'off',
           enableShutterSound: false,
-          qualityPrioritization: 'speed',
         });
 
         photoPath = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;

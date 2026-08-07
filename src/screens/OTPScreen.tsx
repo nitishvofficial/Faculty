@@ -43,20 +43,10 @@ export default function OTPScreen({ navigation, route }: Props) {
     setTimeLeft(FacultyBLEModule.getOTPRemainingSeconds());
     setStudents(FacultyBLEModule.getConnectedStudents());
 
-    // Tell students to enter OTP
-    FacultyBLEModule.broadcastOTPRequest();
-
-    // Start UI timer
-    timerRef.current = setInterval(() => {
-      const remaining = FacultyBLEModule.getOTPRemainingSeconds();
-      setTimeLeft(remaining);
-      if (remaining === 0) {
-        setOtp(''); // Clear from UI visually
-      }
-    }, 1000);
-
-    // Update list on verification events
-    FacultyBLEModule.startSession({
+    // Register OTP-phase callbacks FIRST (preserves connected students map)
+    // Using updateCallbacks() instead of startSession() to avoid clearing
+    // the connectedStudents map — which would break OTP verification lookups.
+    FacultyBLEModule.updateCallbacks({
       onStudentJoined: student => {
         setStudents(FacultyBLEModule.getConnectedStudents());
         // If student joins after OTP was broadcasted, they already get the OTP_REQUEST in the module's handleJOIN
@@ -68,6 +58,18 @@ export default function OTPScreen({ navigation, route }: Props) {
         setOtp('');
       }
     });
+
+    // THEN tell students to enter OTP (handlers are now active)
+    FacultyBLEModule.broadcastOTPRequest();
+
+    // Start UI timer
+    timerRef.current = setInterval(() => {
+      const remaining = FacultyBLEModule.getOTPRemainingSeconds();
+      setTimeLeft(remaining);
+      if (remaining === 0) {
+        setOtp(''); // Clear from UI visually
+      }
+    }, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);

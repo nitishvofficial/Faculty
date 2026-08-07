@@ -132,8 +132,10 @@ export default function BLESessionScreen({ navigation, route }: Props) {
     return () => {
       mounted = false;
       stopPulse();
-      FacultyBLEModule.stopSession();
-      FacultyBLEModule.stopAdvertising().catch(() => {});
+      // Don't call stopSession() or stopAdvertising() here — the session
+      // lifecycle continues into OTPScreen, which takes over event handlers
+      // via updateCallbacks(). Advertising stays active so late-joining
+      // students can still connect during the OTP phase.
     };
   }, [classInfo, startPulse, stopPulse]);
 

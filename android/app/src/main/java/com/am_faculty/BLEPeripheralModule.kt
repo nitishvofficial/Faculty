@@ -130,7 +130,7 @@ class BLEPeripheralModule(reactContext: ReactApplicationContext) : ReactContextB
             // Student -> Faculty (Write)
             studentToFacultyChar = BluetoothGattCharacteristic(
                 s2fUuid,
-                BluetoothGattCharacteristic.PROPERTY_WRITE,
+                BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
                 BluetoothGattCharacteristic.PERMISSION_WRITE
             )
 
